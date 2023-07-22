@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import json
+import time
 from os import environ
 from typing import Literal
 
@@ -8,8 +9,10 @@ import requests
 from pydantic import BaseModel
 
 API_KEY = environ["HETZNER_DNS_API_KEY"]
-DOMAIN = environ["DD_DOMAIN"]
+DOMAIN = environ["DYNAMIC_DOMAIN"]
 WILDCARD = "*"
+INTERVAL = 15 * 60  # seconds
+READ_ONLY = False
 
 
 class Zone(BaseModel):
@@ -132,4 +135,6 @@ def main(read_only=False):
 
 
 if __name__ == "__main__":
-    main(read_only=True)
+    while True:
+        time.sleep(INTERVAL)
+        main(read_only=READ_ONLY)

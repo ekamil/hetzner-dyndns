@@ -11,10 +11,11 @@ from pydantic import BaseModel
 
 API_KEY = environ["HETZNER_DNS_API_KEY"]
 DOMAIN = environ["DYNAMIC_DOMAIN"]
+ORIGIN = "@"
 WILDCARD = "*"
-INTERVAL = int(environ["INTERVAL_SECONDS"])
+INTERVAL = int(environ.get("INTERVAL_SECONDS", 15 * 60))
 READ_ONLY = False
-
+DEFAULT_TTL = INTERVAL
 
 class Zone(BaseModel):
     id: str
@@ -26,7 +27,7 @@ class Record(BaseModel):
     name: str
     type: Literal["A", "NS", "SOA", "MX", "TXT", "SRV"]
     value: str
-    ttl: int | None = 7200
+    ttl: int | None = DEFAULT_TTL
     id: str | None = None
 
 
@@ -64,6 +65,7 @@ def get_records(zone: Zone) -> list[Record]:
 
 
 def create_record(record: Record):
+    logger.info(f"Creating new record: {record}")
     response = requests.post(
         url="https://dns.hetzner.com/api/v1/records",
         headers={
@@ -85,6 +87,7 @@ def create_record(record: Record):
 def update_record(record: Record, new_value: str):
     # Update Record
     # PUT https://dns.hetzner.com/api/v1/records/{RecordID}
+    logger.info(f"Updating record {record} to value={new_value}")
 
     response = requests.put(
         url=f"https://dns.hetzner.com/api/v1/records/{record.id}",
@@ -114,20 +117,21 @@ def get_my_ip():
 def main(read_only=False):
     for zone in get_zones():
         logger.info(f"Zone {zone.id} name: {zone.name}")
-        can_update_record = None
         for record in get_records(zone):
             logger.info(f"\t{record.name} {record.ttl} IN {record.type} {record.value}")
-            if zone.name == DOMAIN and record.name == WILDCARD:
-                can_update_record = record
         if zone.name == DOMAIN:
             if read_only:
-                logger.info(f"R/O: existing record: {can_update_record} ")
-                return
-            my_ip = get_my_ip()
-            if can_update_record:
-                update_record(can_update_record, my_ip)
+                logger.info(f"R/O: doing nothing")
             else:
-                create_record(Record(zone=zone, name=WILDCARD, type="A", value=my_ip))
+                create_record_for_my_ip(zone)
+
+
+def create_record_for_my_ip(zone):
+    my_ip = get_my_ip()
+    new_wildcard_record = Record(zone=zone, name=WILDCARD, type="A", value=my_ip)
+    create_record(new_wildcard_record)
+    new_origin_record = Record(zone=zone, name=ORIGIN, type="A", value=my_ip)
+    create_record(new_origin_record)
 
 
 if __name__ == "__main__":

@@ -12,5 +12,6 @@ COPY ./docker-entrypoint.sh /docker-entrypoint.sh
 
 ENV HETZNER_DNS_API_KEY=CHANGE_ME
 ENV DYNAMIC_DOMAIN=CHANGE_ME
+ENV INTERVAL_SECONDS=900
 
 ENTRYPOINT ["/docker-entrypoint.sh"]

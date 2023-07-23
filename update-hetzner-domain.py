@@ -12,7 +12,7 @@ from pydantic import BaseModel
 API_KEY = environ["HETZNER_DNS_API_KEY"]
 DOMAIN = environ["DYNAMIC_DOMAIN"]
 WILDCARD = "*"
-INTERVAL = 15  # * 60  # seconds
+INTERVAL = int(environ["INTERVAL_SECONDS"])
 READ_ONLY = False
 
 

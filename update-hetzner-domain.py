@@ -17,6 +17,7 @@ INTERVAL = int(environ.get("INTERVAL_SECONDS", 15 * 60))
 READ_ONLY = False
 DEFAULT_TTL = INTERVAL
 
+
 class Zone(BaseModel):
     id: str
     name: str
@@ -136,7 +137,11 @@ def create_record_for_my_ip(zone):
 
 if __name__ == "__main__":
     logger.info("Starting script")
+    # TODO: ratelimit
     while True:
-        main(read_only=READ_ONLY)
+        try:
+            main(read_only=READ_ONLY)
+        except:
+            logger.exception("Unhandled exception")
         logger.info(f"Sleep for {INTERVAL} seconds")
         time.sleep(INTERVAL)

@@ -26,7 +26,7 @@ class Zone(BaseModel):
 class Record(BaseModel):
     zone: Zone
     name: str
-    type: Literal["A", "NS", "SOA", "MX", "TXT", "SRV"]
+    type: Literal["A", "NS", "SOA", "MX", "TXT", "SRV"] = "A"
     value: str
     ttl: int | None = DEFAULT_TTL
     id: str | None = None
@@ -85,28 +85,58 @@ def create_record(record: Record):
     )
 
 
-def update_record(record: Record, new_value: str):
-    # Update Record
-    # PUT https://dns.hetzner.com/api/v1/records/{RecordID}
-    logger.info(f"Updating record {record} to value={new_value}")
+def delete_record(record: Record) -> bool:
+    # Delete Record
+    # DELETE https://dns.hetzner.com/api/v1/records/{RecordID}
+    logger.info(f"Deleting record {record}")
 
-    response = requests.put(
+    response = requests.delete(
         url=f"https://dns.hetzner.com/api/v1/records/{record.id}",
         headers={
             "Content-Type": "application/json",
             "Auth-API-Token": API_KEY,
         },
-        data=json.dumps(
-            {
-                "value": new_value,
-                "ttl": record.ttl,
-                "type": record.type,
-                "name": record.name,
-                "zone_id": record.zone.id,
-            }
-        ),
     )
-    response.raise_for_status()
+    match response.status_code:
+        case 200:
+            logger.info(f"Success")
+            return True
+        case 404:
+            logger.info(f"Domain not found {record}")
+            logger.info(f"Response {response.status_code} {response.text}")
+            return False
+        case _:
+            logger.info(f"Response {response.status_code} {response.text}")
+            response.raise_for_status()
+
+
+def create_records_for_my_ip(zone) -> None:
+    logger.info(f"Updating wildcard records for zone {zone}")
+    my_ip = get_my_ip()
+    logger.info(f"IP address: {my_ip}")
+    deleted = []
+    created = []
+    kept = []
+    names = (WILDCARD, ORIGIN)
+    for record in get_records(zone):
+        if record.type != "A":
+            continue
+        for name in names:
+            if record.name == name:
+                if record.value == my_ip:
+                    kept.append(name)
+                else:
+                    delete_record(record)
+                    deleted.append(name)
+    for name in names:
+        if name in kept:
+            continue
+        new_record = Record(zone=zone, name=name, type="A", value=my_ip)
+        create_record(new_record)
+
+    logger.info("Deleted {} records".format(deleted))
+    logger.info("Created {} records".format(created))
+    logger.info("Kept as-is {} records".format(kept))
 
 
 def get_my_ip():
@@ -124,15 +154,7 @@ def main(read_only=False):
             if read_only:
                 logger.info(f"R/O: doing nothing")
             else:
-                create_record_for_my_ip(zone)
-
-
-def create_record_for_my_ip(zone):
-    my_ip = get_my_ip()
-    new_wildcard_record = Record(zone=zone, name=WILDCARD, type="A", value=my_ip)
-    create_record(new_wildcard_record)
-    new_origin_record = Record(zone=zone, name=ORIGIN, type="A", value=my_ip)
-    create_record(new_origin_record)
+                create_records_for_my_ip(zone)
 
 
 if __name__ == "__main__":

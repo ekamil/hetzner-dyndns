@@ -332,7 +332,6 @@ def loop(domain: str, interval: int = INTERVAL, *, api_key: str = API_KEY) -> No
     Start a while loop and update DOMAIN to a current external IP address periodically
     """
     logger.info(f"Starting loop over {domain} with interval of {INTERVAL} seconds")
-    # TODO: ratelimit
     while True:
         try:
             _create_records_for_my_ip(domain, api_key=api_key)

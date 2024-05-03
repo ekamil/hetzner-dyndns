@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 """
 Single domain script:
-update-domain.py add <domain> <type> <value>
-update-domain.py delete <domain>
+update-domain.py --help
 """
-import argparse  # use click
 import json
 import time
 from os import environ
-from typing import Literal, TypeVar
+from typing import Literal, Any
 import enum
 
 import click
@@ -54,6 +52,9 @@ class Record(BaseModel):
     value: Literal["@"] | Literal["*"] | str | None = None
     ttl: int | None = DEFAULT_TTL
     id: str | None = None
+
+    def model_post_init(self, __context: Any) -> None:
+        self.name = self.name.removesuffix(f".{self.zone.name}")
 
 
 def get_zones(*, api_key: str = API_KEY) -> list[Zone]:
@@ -175,7 +176,9 @@ def _get_records(zone: Zone, *, api_key: str = API_KEY) -> list[Record]:
         yield Record(zone=zone, **record)
 
 
-def _get_zone_for_domain(zone_or_domain: Zone | str, *, api_key: str = API_KEY) -> Zone | None:
+def _get_zone_for_domain(
+    zone_or_domain: Zone | str, *, api_key: str = API_KEY
+) -> Zone | None:
     if isinstance(zone_or_domain, Zone):
         return zone_or_domain
     for zone in get_zones(api_key=api_key):
@@ -191,7 +194,9 @@ def _get_my_ip():
     return response.text
 
 
-def _create_records_for_my_ip(zone_or_domain: Zone | str, *, api_key: str = API_KEY) -> None:
+def _create_records_for_my_ip(
+    zone_or_domain: Zone | str, *, api_key: str = API_KEY
+) -> None:
     match zone_or_domain:
         case Zone():
             zone = zone_or_domain
@@ -240,10 +245,18 @@ def cli() -> None:
 @click.argument("domain")
 @click.argument("record_type", default=RecordType.A)
 @click.argument("value", default="IP")
-def add_domain(domain: str, record_type: RecordType, value: str | Literal["IP"], *, api_key: str = API_KEY) -> None:
+def add_domain(
+    domain: str,
+    record_type: RecordType,
+    value: str | Literal["IP"],
+    *,
+    api_key: str = API_KEY,
+) -> None:
     if value == "IP":
         value = _get_my_ip()
-        logger.info(f"Adding domain: {domain}, Type: {record_type}, Value: {value} (current IP)")
+        logger.info(
+            f"Adding domain: {domain}, Type: {record_type}, Value: {value} (current IP)"
+        )
     else:
         logger.info(f"Adding domain: {domain}, Type: {record_type}, Value: {value}")
     zone = _get_zone_for_domain(domain, api_key=api_key)
@@ -257,7 +270,9 @@ def add_domain(domain: str, record_type: RecordType, value: str | Literal["IP"],
 @cli.command()
 @click.argument("domain")
 @click.argument("record_type")
-def delete_domain(domain: str, record_type: RecordType, *, api_key: str = API_KEY) -> None:
+def delete_domain(
+    domain: str, record_type: RecordType, *, api_key: str = API_KEY
+) -> None:
     logger.info(f"Deleting domain: {domain}")
     zone = _get_zone_for_domain(domain, api_key=api_key)
     deleted = 0
@@ -303,7 +318,9 @@ def list_records(domain: Zone | str, *, api_key: str = API_KEY) -> None:
 
 @cli.command()
 @click.argument("domain")
-def create_records_for_my_ip(zone_or_domain: Zone | str, *, api_key: str = API_KEY) -> None:
+def create_records_for_my_ip(
+    zone_or_domain: Zone | str, *, api_key: str = API_KEY
+) -> None:
     _create_records_for_my_ip(zone_or_domain, api_key=api_key)
 
 

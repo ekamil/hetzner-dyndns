@@ -14,10 +14,9 @@ import requests
 from loguru import logger
 from pydantic import BaseModel
 
-INTERVAL = int(environ.get("INTERVAL_SECONDS", 15 * 60))
 API_KEY = environ["HETZNER_DNS_API_KEY"]
 
-DEFAULT_TTL = INTERVAL
+INTERVAL = DEFAULT_TTL = 15 * 60
 
 ORIGIN = "@"
 WILDCARD = "*"
@@ -207,23 +206,29 @@ def _create_records_for_my_ip(
                 raise ValueError(f"Zone {zone_or_domain} not found")
         case _:
             raise ValueError(f"Invalid zone {zone_or_domain}")
-    logger.info(f"Updating wildcard records for zone {zone}")
+    logger.info(f"Updating wildcard records for domain {zone_or_domain}")
     my_ip = _get_my_ip()
     logger.info(f"IP address: {my_ip}")
     deleted = []
     created = []
     kept = []
+    if zone_or_domain == zone.name:
+        record_names = (WILDCARD, ORIGIN)
+    else:
+        _prefix = zone_or_domain.removesuffix(zone.name).removesuffix(".")
+        record_names = (f"{WILDCARD}.{_prefix}", f"{_prefix}")
+    logger.warning(record_names)
     for record in _get_records(zone, api_key=api_key):
         if record.type != "A":
             continue
-        for name in (WILDCARD, ORIGIN):
+        for name in record_names:
             if record.name == name:
                 if record.value == my_ip:
                     kept.append(name)
                 else:
                     _delete_record(record, api_key=api_key)
                     deleted.append(name)
-    for name in (WILDCARD, ORIGIN):
+    for name in record_names:
         if name in kept:
             continue
         new_record = Record(zone=zone, name=name, type=RecordType.A, value=my_ip)
@@ -325,18 +330,20 @@ def create_records_for_my_ip(
 
 
 @cli.command()
-@click.argument("domain")
-@click.argument("interval", default=INTERVAL)
-def loop(domain: str, interval: int = INTERVAL, *, api_key: str = API_KEY) -> None:
+@click.argument("domains")
+@click.option("--interval", default=INTERVAL)
+def loop(domains: str, interval: int = INTERVAL, *, api_key: str = API_KEY) -> None:
     """
-    Start a while loop and update DOMAIN to a current external IP address periodically
+    Start a while loop and update DOMAINS to a current external IP address periodically
+        DOMAINS is a comma-separated list of domains to upgrade
     """
-    logger.info(f"Starting loop over {domain} with interval of {INTERVAL} seconds")
+    logger.info(f"Starting loop over {domains} with interval of {INTERVAL} seconds")
     while True:
-        try:
-            _create_records_for_my_ip(domain, api_key=api_key)
-        except Exception as e:
-            logger.exception(f"Unhandled exception {e}")
+        for domain in domains.split(","):
+            try:
+                _create_records_for_my_ip(domain, api_key=api_key)
+            except Exception as e:
+                logger.exception(f"Unhandled exception {e}")
         logger.info(f"Sleep for {interval} seconds")
         time.sleep(interval)
 

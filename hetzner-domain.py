@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Single domain script:
-update-domain.py --help
+hetzner-domain.py --help
 """
 import json
 import time
@@ -97,37 +97,6 @@ def _create_record(record: Record, *, api_key: str = API_KEY) -> bool:
             logger.info(f"Response {response.status_code} {response.text}")
             return False
         case _:
-            logger.info(f"Response {response.status_code} {response.text}")
-            response.raise_for_status()
-
-
-def _update_record(record: Record, new_value: str, *, api_key: str = API_KEY):
-    # Update Record
-    # PUT https://dns.hetzner.com/api/v1/records/{RecordID}
-    logger.info(f"Updating record {record} to value={new_value}")
-
-    response = requests.put(
-        url=f"https://dns.hetzner.com/api/v1/records/{record.id}",
-        headers={
-            "Content-Type": "application/json",
-            "Auth-API-Token": api_key,
-        },
-        data=json.dumps(
-            {
-                "value": new_value,
-                "ttl": record.ttl,
-                "type": record.type,
-                "name": record.name,
-                "zone_id": record.zone.id,
-            }
-        ),
-    )
-    match response.status_code:
-        case 200:
-            logger.info(f"Success")
-            return True
-        case _:
-            logger.info(f"Unhandled error for update to {record}")
             logger.info(f"Response {response.status_code} {response.text}")
             response.raise_for_status()
 
@@ -250,10 +219,12 @@ def cli() -> None:
 @click.argument("domain")
 @click.argument("record_type", default=RecordType.A)
 @click.argument("value", default="IP")
+@click.option("--ttl", default=DEFAULT_TTL)
 def add_domain(
     domain: str,
     record_type: RecordType,
     value: str | Literal["IP"],
+    ttl: int = DEFAULT_TTL,
     *,
     api_key: str = API_KEY,
 ) -> None:
@@ -268,7 +239,7 @@ def add_domain(
     if not zone:
         click.echo(f"Zone not found for {domain}", err=True)
         return
-    record = Record(zone=zone, name=domain, type=record_type, value=value)
+    record = Record(zone=zone, name=domain, type=record_type, value=value, ttl=ttl)
     _create_record(record, api_key=api_key)
 
 
